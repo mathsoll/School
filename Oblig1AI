@@ -1,0 +1,111 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import gaussian_kde
+from scipy import stats
+import seaborn as sns
+
+"""
+
+INFO OM DATA:
+    
+    
+TurId: Unique id for the tour (trip). A trip is a journey from one stop to the next one	
+Dato: date
+Fylke: County
+Område: Area
+Kommune: Municipality	
+Holdeplass_Fra: from_stop	
+Holdeplass_Til: to_stop		
+Linjetype: local bus or a school bus	
+Linjefylke: county	
+Linjenavn: bus number	
+
+Linjeretning: This is the direction of the bus (e.g when bus 21 
+(Helsfyr - Tjuvholmen) drives  towards helsfyr this setting is 0 and on 
+the second return trip when it goes towards Tjuvholmen, this setting is 1)
+	
+Tidspunkt_Faktisk_Ankomst_Holdeplass_Fra: actual arrival time
+Tidspunkt_Faktisk_Avgang_Holdeplass_Fra	: actual departure time
+Tidspunkt_Planlagt_Ankomst_Holdeplass_Fra: planned arrival time	
+Tidspunkt_Planlagt_Avgang_Holdeplass_Fra: planned departure time	
+Kjøretøy_Kapasitet: planned capacity for buss	
+Passasjerer_Ombord: actual capacity
+
+"""
+
+df = pd.read_csv("Ruter_data.csv", sep = ';' )
+
+df[['ptimer','pminutter','psekunder']] = df.Tidspunkt_Planlagt_Ankomst_Holdeplass_Fra.str.split(":",expand=True)
+df[['ftimer','fminutter','fsekunder']] = df.Tidspunkt_Faktisk_Ankomst_Holdeplass_Fra.str.split(":",expand=True)
+df[['dag','måned','år',]] = df.Dato.str.split("/", expand = True)
+
+fm = pd.to_numeric(df.fminutter)
+ft = pd.to_numeric(df.ftimer)
+pm = pd.to_numeric(df.pminutter)
+pt = pd.to_numeric(df.ptimer)
+ps = pd.to_numeric(df.psekunder)
+fs = pd.to_numeric(df.fsekunder)
+pkp = pd.to_numeric(df.Kjøretøy_Kapasitet)
+fkp = pd.to_numeric(df.Passasjerer_Ombord)
+mnd = pd.to_numeric(df.måned)
+dag = pd.to_numeric(df.dag)
+delay = (ft*60 + fm + fs/60) - (pt*60 + pm + ps/60)
+
+df['Passasjerer'] = fkp
+df['måned'] = mnd
+df['dag'] = dag
+df['Forsinkelse'] = delay
+
+oslo_delay = df.loc[(df['Fylke'] == 'Oslo') 
+                           & (df['Forsinkelse'] > 0) 
+                           & (df['Forsinkelse'] <= 20)
+                           & (df['Passasjerer'] > 0)
+                           & (df['måned'] == 8)]
+
+passasjerer_dato = df.loc[(df['Fylke'] == 'Oslo')
+                          & (df['måned'] == 8)
+                          & (df['Passasjerer'] > 0)]
+
+Linje_310 = df.loc[(df['Linjenavn'] == '31')
+                  & (df['Linjeretning'] == 0)
+                  & (df['Passasjerer']  > 0)
+                  & (df['Forsinkelse'] > 0)
+                  & (df['måned'] == 8)]
+
+Linje_311 = df.loc[(df['Linjenavn'] == '31')
+                  & (df['Linjeretning'] == 1)
+                  & (df['Passasjerer']  > 0)
+                  & (df['Forsinkelse'] > 0)
+                  & (df['måned'] == 8)]
+
+plt.figure(1)
+plt.subplot(121)
+sns.scatterplot(oslo_delay['Forsinkelse'],oslo_delay['Linjenavn'])
+plt.xlabel('Forsinkelser i Oslo (min), August mnd')
+plt.ylabel('Linjenummer')
+plt.grid()
+plt.show()
+
+plt.subplot(122)
+sns.scatterplot(oslo_delay['Passasjerer'].groupby([oslo_delay['Linjenavn']]).sum(), oslo_delay['Linjenavn'].unique())
+plt.xlabel('Passasjerer fordelt på linjenummer i Oslo, August mnd.')
+plt.ylabel('Linjenummer')
+plt.grid()
+plt.show()
+
+plt.figure(2)
+sns.scatterplot(passasjerer_dato['Passasjerer'].groupby(dag).sum(),passasjerer_dato['dag'].unique())
+plt.xlabel('Passasjerer i Oslo')
+plt.ylabel('Dato, August mnd.')
+plt.grid()
+plt.show()
+
+plt.figure(3)
+sns.displot(Linje_310['Forsinkelse'], bins = 25)
+plt.xlabel('Forsinkelse(min) i retning Grodud (August)')
+plt.ylabel('Antall ganger')
+plt.figure(4)
+sns.displot(Linje_311['Forsinkelse'], bins = 25)
+plt.xlabel('Forsinkelse(min) i retning Snarøya (August)')
+plt.ylabel('Antall ganger')
