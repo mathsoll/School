@@ -1,0 +1,120 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import gaussian_kde
+from scipy import stats
+import seaborn as sns
+
+import sklearn
+from sklearn import linear_model
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import multilabel_confusion_matrix
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import mean_squared_error, r2_score
+import datetime as dt
+from datetime import datetime
+
+"""
+
+INFO OM DATA:
+    
+    
+TurId: Unique id for the tour (trip). A trip is a journey from one stop to the next one	
+Dato: date
+Fylke: County
+Område: Area
+Kommune: Municipality	
+Holdeplass_Fra: from_stop	
+Holdeplass_Til: to_stop		
+Linjetype: local bus or a school bus	
+Linjefylke: county	
+Linjenavn: bus number	
+
+Linjeretning: This is the direction of the bus (e.g when bus 21 
+(Helsfyr - Tjuvholmen) drives  towards helsfyr this setting is 0 and on 
+the second return trip when it goes towards Tjuvholmen, this setting is 1)
+	
+Tidspunkt_Faktisk_Ankomst_Holdeplass_Fra: actual arrival time
+Tidspunkt_Faktisk_Avgang_Holdeplass_Fra	: actual departure time
+Tidspunkt_Planlagt_Ankomst_Holdeplass_Fra: planned arrival time	
+Tidspunkt_Planlagt_Avgang_Holdeplass_Fra: planned departure time	
+Kjøretøy_Kapasitet: planned capacity for buss	
+Passasjerer_Ombord: actual capacity
+
+"""
+#Reading data to a Pandas table
+rutermain = pd.read_csv('Ruter_data.csv', sep = ';')
+
+#Isolating buss 31 and resetting index
+buss = pd.DataFrame(rutermain.loc[(rutermain['Linjenavn'] == '31')])
+buss = buss.reset_index()
+
+#Cleaning the data and removing every unnecessary variable
+buss.drop(['index','TurId','Fylke', 'Område', 'Kommune', 'Linjetype', 'Linjefylke', 'Kjøretøy_Kapasitet',
+           'Tidspunkt_Faktisk_Ankomst_Holdeplass_Fra','Tidspunkt_Faktisk_Avgang_Holdeplass_Fra',
+           'Tidspunkt_Planlagt_Ankomst_Holdeplass_Fra', 'Tidspunkt_Planlagt_Avgang_Holdeplass_Fra',
+           'Holdeplass_Fra', 'Holdeplass_Til', 'Linjenavn', 'Linjeretning'], axis = 1, inplace = True)
+
+#Converting date to weekday number
+weekdaynumber=[]
+for i in buss.index:
+    weekdaynumber.append(datetime.strptime(buss.loc[i][0],'%d/%m/%Y').weekday())
+
+#Adding weekday number to the data table
+buss['Ukedagnummer'] = weekdaynumber
+buss['Passasjerer_Ombord'] = buss['Passasjerer_Ombord'].abs()
+
+#Creating pandas table for weekday number, which is to be x
+x = pd.DataFrame(buss['Ukedagnummer'])
+
+#Creating pandas table for number of passangers, which is to be y
+y = pd.DataFrame(buss['Passasjerer_Ombord'])
+
+#Split data into train and test set, with testsize 0.35
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.35, random_state=1)
+
+#Make a linear regression model, and train it
+regObj = linear_model.LinearRegression()
+regObj.fit(x_train,y_train)
+
+#Make a prediction on the test set
+linreg_y_pred = regObj.predict(x_test)
+
+# The coefficients
+print('Coefficients: \n', regObj.coef_)
+# The mean squared error
+print('Mean squared error: %.2f'
+      % mean_squared_error(y_test, linreg_y_pred))
+# The coefficient of determination: 1 is perfect prediction
+print('Coefficient of determination: %.2f'
+      % r2_score(y_test, linreg_y_pred))
+
+#PROOF OF EQUATION
+intercept = regObj.intercept_
+coefficient = regObj.coef_
+
+#Plot the result
+plt.xlabel('Date',fontsize=16)
+plt.ylabel('Number of passangers',fontsize=16)
+plt.scatter(x_test, y_test,color='blue')
+plt.plot(x_test, linreg_y_pred,color='red')
+plt.grid()
+
+#Create a logistic regression model, and train it
+logmodel = LogisticRegression(max_iter = 5000)
+logmodel.fit(x_train, y_train)
+
+#Make prediction on test set
+y_predictions = logmodel.predict(x_test)
+
+#Print result in a confusion matrix
+conf = multilabel_confusion_matrix(y_test, y_predictions)
+
+print ("Classification Report:\n",(classification_report(y_test, y_predictions)))
+print ("Accuracy Score:\n", accuracy_score(y_test, y_predictions))
